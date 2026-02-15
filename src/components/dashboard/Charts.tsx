@@ -1,37 +1,40 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { VendaData } from '@/lib/sheets';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, PieChart, Pie, Cell, FunnelChart, Funnel, LabelList
+} from 'recharts';
+import { SheetRow, num, str } from '@/lib/sheets';
 
-interface ChartsProps {
-  vendas: VendaData[];
+const COLORS = [
+  'hsl(215, 100%, 27%)', 'hsl(215, 80%, 45%)', 'hsl(200, 70%, 50%)',
+  'hsl(190, 60%, 45%)', 'hsl(180, 50%, 40%)', 'hsl(215, 60%, 60%)',
+];
+
+interface GenericChartProps {
+  data: SheetRow[];
 }
 
-const COLORS = ['hsl(215, 100%, 27%)', 'hsl(215, 80%, 45%)', 'hsl(215, 60%, 60%)', 'hsl(200, 70%, 50%)', 'hsl(190, 60%, 45%)', 'hsl(180, 50%, 40%)'];
+export function MonthlyEvolutionChart({ data }: GenericChartProps) {
+  const headers = data.length > 0 ? Object.keys(data[0]) : [];
+  const monthKey = headers.find(h => /m[eê]s|month|periodo/i.test(h)) || headers[0] || 'mes';
+  const valueKey = headers.find(h => /venda|total|valor|receita/i.test(h)) || headers[1] || '';
 
-export function SalesEvolutionChart({ vendas }: ChartsProps) {
-  const dailySales: Record<string, number> = {};
-  vendas.forEach(v => {
-    const key = v.data; // Already YYYY-MM-DD
-    dailySales[key] = (dailySales[key] || 0) + v.valorTotal;
-  });
-
-  const data = Object.entries(dailySales)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([dia, valor]) => ({ dia: dia.substring(5), valor }));
+  const chartData = data.map(row => ({
+    mes: str(row, monthKey),
+    valor: num(row, valueKey),
+  })).filter(d => d.mes);
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Evolução de Vendas no Mês</CardTitle>
-      </CardHeader>
+      <CardHeader><CardTitle className="text-lg">Evolução Mensal</CardTitle></CardHeader>
       <CardContent>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
+            <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 30%, 88%)" />
-              <XAxis dataKey="dia" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => [`R$ ${v.toFixed(2)}`, 'Vendas']} />
+              <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
               <Line type="monotone" dataKey="valor" stroke="hsl(215, 100%, 27%)" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
@@ -41,30 +44,39 @@ export function SalesEvolutionChart({ vendas }: ChartsProps) {
   );
 }
 
-export function SalesByProductChart({ vendas }: ChartsProps) {
-  const byProduct: Record<string, number> = {};
-  vendas.forEach(v => {
-    byProduct[v.produto] = (byProduct[v.produto] || 0) + v.valorTotal;
-  });
+export function FunnelStageChart({ data }: GenericChartProps) {
+  const headers = data.length > 0 ? Object.keys(data[0]) : [];
+  const stageKey = headers.find(h => /etapa|stage|fase|status/i.test(h)) || headers[0] || '';
+  const countKey = headers.find(h => /qtd|quantidade|count|total/i.test(h)) || headers[1] || '';
 
-  const data = Object.entries(byProduct)
-    .sort(([, a], [, b]) => b - a)
-    .map(([produto, valor]) => ({ produto, valor }));
+  const chartData = data.map(row => ({
+    name: str(row, stageKey),
+    value: num(row, countKey),
+  })).filter(d => d.name && d.value > 0);
+
+  if (chartData.length === 0) {
+    return (
+      <Card>
+        <CardHeader><CardTitle className="text-lg">Funil de Esteira</CardTitle></CardHeader>
+        <CardContent>
+          <p className="text-center text-muted-foreground py-8">Dados do funil não disponíveis</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Vendas por Produto</CardTitle>
-      </CardHeader>
+      <CardHeader><CardTitle className="text-lg">Funil de Esteira</CardTitle></CardHeader>
       <CardContent>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data}>
+            <BarChart data={chartData} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(214, 30%, 88%)" />
-              <XAxis dataKey="produto" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 12 }} tickFormatter={v => `R$${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => [`R$ ${v.toFixed(2)}`, 'Vendas']} />
-              <Bar dataKey="valor" fill="hsl(215, 100%, 27%)" radius={[6, 6, 0, 0]} />
+              <XAxis type="number" tick={{ fontSize: 12 }} />
+              <YAxis dataKey="name" type="category" tick={{ fontSize: 11 }} width={120} />
+              <Tooltip />
+              <Bar dataKey="value" fill="hsl(215, 100%, 27%)" radius={[0, 6, 6, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -73,31 +85,33 @@ export function SalesByProductChart({ vendas }: ChartsProps) {
   );
 }
 
-export function SalesByCityChart({ vendas }: ChartsProps) {
-  const byCity: Record<string, number> = {};
-  vendas.forEach(v => {
-    byCity[v.cidade] = (byCity[v.cidade] || 0) + v.valorTotal;
+export function SalesByProductChart({ data }: GenericChartProps) {
+  const headers = data.length > 0 ? Object.keys(data[0]) : [];
+  const productKey = headers.find(h => /produto|product|plano/i.test(h)) || headers[0] || '';
+  const valueKey = headers.find(h => /venda|total|valor|qtd/i.test(h)) || headers[1] || '';
+
+  const byProduct: Record<string, number> = {};
+  data.forEach(row => {
+    const p = str(row, productKey);
+    if (p) byProduct[p] = (byProduct[p] || 0) + num(row, valueKey);
   });
 
-  const data = Object.entries(byCity)
+  const chartData = Object.entries(byProduct)
     .sort(([, a], [, b]) => b - a)
-    .map(([cidade, valor]) => ({ cidade, valor }));
+    .map(([produto, valor]) => ({ produto, valor }));
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">Vendas por Cidade</CardTitle>
-      </CardHeader>
+      <CardHeader><CardTitle className="text-lg">Vendas por Produto</CardTitle></CardHeader>
       <CardContent>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={data} dataKey="valor" nameKey="cidade" cx="50%" cy="50%" outerRadius={100} label={({ cidade, percent }) => `${cidade} (${(percent * 100).toFixed(0)}%)`}>
-                {data.map((_, i) => (
-                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                ))}
+              <Pie data={chartData} dataKey="valor" nameKey="produto" cx="50%" cy="50%" outerRadius={100}
+                label={({ produto, percent }) => `${produto} (${(percent * 100).toFixed(0)}%)`}>
+                {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
-              <Tooltip formatter={(v: number) => [`R$ ${v.toFixed(2)}`, 'Vendas']} />
+              <Tooltip />
             </PieChart>
           </ResponsiveContainer>
         </div>

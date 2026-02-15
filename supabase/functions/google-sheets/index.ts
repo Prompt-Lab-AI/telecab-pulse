@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { decode as decodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { encode as encodeBase64 } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
@@ -7,26 +6,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SPREADSHEET_ID = '170Blvbcl0zmF5z_mj1CZiEEKVVrFs5vBHjRaMCj-Pic';
-
 function base64url(data: string | Uint8Array): string {
-  let input: Uint8Array;
-  if (typeof data === 'string') {
-    input = new TextEncoder().encode(data);
-  } else {
-    input = data;
-  }
-  return encodeBase64(input)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  const input = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  return encodeBase64(input).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function base64urlFromBuffer(buf: ArrayBuffer): string {
-  return encodeBase64(new Uint8Array(buf))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  return encodeBase64(new Uint8Array(buf)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 async function getAccessToken(): Promise<string> {
@@ -48,20 +34,13 @@ async function getAccessToken(): Promise<string> {
   const payloadB64 = base64url(JSON.stringify(payload));
   const signInput = `${headerB64}.${payloadB64}`;
 
-  // Parse PEM key - strip headers and only keep valid base64 chars
   let pemBody = privateKeyPem
     .replace(/-----BEGIN PRIVATE KEY-----/g, '')
     .replace(/-----END PRIVATE KEY-----/g, '')
-    .replace(/[\r\n\s]/g, '');
-  
-  // Only keep valid base64 characters
-  pemBody = pemBody.replace(/[^A-Za-z0-9+/=]/g, '');
-  
-  console.log('PEM cleaned length:', pemBody.length, 'first 30:', pemBody.substring(0, 30), 'last 10:', pemBody.substring(pemBody.length - 10));
-  
-  // Manual base64 decode without using atob
+    .replace(/[\r\n\s]/g, '')
+    .replace(/[^A-Za-z0-9+/=]/g, '');
+
   const lookup = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  // Remove padding
   const base64 = pemBody.replace(/=/g, '');
   const len = base64.length;
   const bufLen = Math.floor(len * 3 / 4);
@@ -78,16 +57,13 @@ async function getAccessToken(): Promise<string> {
   }
 
   const cryptoKey = await crypto.subtle.importKey(
-    'pkcs8',
-    binaryKey,
+    'pkcs8', binaryKey,
     { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign']
+    false, ['sign']
   );
 
   const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    cryptoKey,
+    'RSASSA-PKCS1-v1_5', cryptoKey,
     new TextEncoder().encode(signInput)
   );
 
@@ -106,14 +82,15 @@ async function getAccessToken(): Promise<string> {
   return tokenData.access_token;
 }
 
-async function fetchSheet(accessToken: string, sheetName: string): Promise<any[][]> {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(sheetName)}`;
+async function fetchSheet(accessToken: string, spreadsheetId: string, sheetName: string): Promise<any[][]> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const data = await res.json();
   if (data.error) {
-    throw new Error(`Sheets API error for ${sheetName}: ${JSON.stringify(data.error)}`);
+    console.error(`Sheets API error for ${sheetName}:`, JSON.stringify(data.error));
+    return [];
   }
   return data.values || [];
 }
@@ -124,25 +101,39 @@ serve(async (req) => {
   }
 
   try {
+    const spreadsheetId = Deno.env.get('SPREADSHEET_ID')!;
+    const accessToken = await getAccessToken();
+
     const url = new URL(req.url);
     const sheet = url.searchParams.get('sheet');
 
-    const accessToken = await getAccessToken();
-
     if (sheet) {
-      const data = await fetchSheet(accessToken, sheet);
+      const data = await fetchSheet(accessToken, spreadsheetId, sheet);
       return new Response(JSON.stringify({ data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const [paps, vendas, metas] = await Promise.all([
-      fetchSheet(accessToken, 'PAPs'),
-      fetchSheet(accessToken, 'Vendas'),
-      fetchSheet(accessToken, 'Metas'),
-    ]);
+    const sheetNames = [
+      'BASE_UNICA',
+      'VISAO_MENSAL',
+      'ESTEIRA_MENSAL',
+      'base_dados',
+      'PROGRAMAÇÃO_SEMANAL',
+      'DATAS COMEMORATIVASS_CIDADES',
+      'ACOMP_CONDOMINIOS',
+    ];
 
-    return new Response(JSON.stringify({ paps, vendas, metas }), {
+    const results = await Promise.all(
+      sheetNames.map(name => fetchSheet(accessToken, spreadsheetId, name))
+    );
+
+    const response: Record<string, any[][]> = {};
+    sheetNames.forEach((name, i) => {
+      response[name] = results[i];
+    });
+
+    return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {

@@ -1,21 +1,10 @@
 import * as XLSX from 'xlsx';
-import { VendaData } from '@/lib/sheets';
+import { SheetRow } from '@/lib/sheets';
 
-export function exportToExcel(vendas: VendaData[], filename = 'telecab-vendas.xlsx') {
-  const wsData = vendas.map(v => ({
-    Data: v.data,
-    PAP: v.papId,
-    Produto: v.produto,
-    Cidade: v.cidade,
-    Visitas: v.visitas,
-    Vendas: v.vendas,
-    'Valor Total': v.valorTotal,
-    Instalado: v.instalado,
-    NPS: v.nps,
-  }));
-
-  const ws = XLSX.utils.json_to_sheet(wsData);
+export function exportToExcel(data: SheetRow[], filename = 'telecab-export') {
+  if (!data.length) return;
+  const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Vendas');
-  XLSX.writeFile(wb, filename);
+  XLSX.utils.book_append_sheet(wb, ws, 'Dados');
+  XLSX.writeFile(wb, `${filename}.xlsx`);
 }
