@@ -1,21 +1,27 @@
 import { useState, useEffect, useCallback } from 'react';
-import { fetchAllSheets, PapData, VendaData, MetaData } from '@/lib/sheets';
+import { fetchAllSheets, AllSheetsData } from '@/lib/sheets';
 import { useToast } from '@/hooks/use-toast';
 
+const emptyData: AllSheetsData = {
+  baseUnica: [],
+  visaoMensal: [],
+  esteiraMensal: [],
+  baseDados: [],
+  programacaoSemanal: [],
+  datasComemoativas: [],
+  acompCondominios: [],
+};
+
 export function useSheetsData(refreshInterval = 30000) {
-  const [paps, setPaps] = useState<PapData[]>([]);
-  const [vendas, setVendas] = useState<VendaData[]>([]);
-  const [metas, setMetas] = useState<MetaData[]>([]);
+  const [data, setData] = useState<AllSheetsData>(emptyData);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const { toast } = useToast();
 
   const fetchData = useCallback(async () => {
     try {
-      const data = await fetchAllSheets();
-      setPaps(data.paps);
-      setVendas(data.vendas);
-      setMetas(data.metas);
+      const result = await fetchAllSheets();
+      setData(result);
       setLastUpdate(new Date());
     } catch (err: any) {
       console.error('Erro ao buscar dados:', err);
@@ -35,5 +41,5 @@ export function useSheetsData(refreshInterval = 30000) {
     return () => clearInterval(interval);
   }, [fetchData, refreshInterval]);
 
-  return { paps, vendas, metas, loading, lastUpdate, refetch: fetchData };
+  return { ...data, loading, lastUpdate, refetch: fetchData };
 }
