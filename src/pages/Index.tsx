@@ -11,6 +11,9 @@ import { CondominiosList } from '@/components/dashboard/CondominiosList';
 import { exportToExcel } from '@/lib/export';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { AlertTriangle } from 'lucide-react';
+import telecabLogo from '@/assets/telecab-logo.png';
 import {
   applyAllFilters, calculateKPIs, calculatePapRankings, generateAlerts,
   getRevenueByProduct, getVendasByDay, getFunnelData,
@@ -77,16 +80,37 @@ const Index = () => {
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-primary px-4 py-3 text-primary-foreground shadow-md md:px-8">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <div>
-            <h1 className="text-base font-bold tracking-tight md:text-lg">
-              📊 Acompanhamento Entrega PAPs
-            </h1>
-            <p className="text-[10px] opacity-70">Telecab — Painel do Supervisor</p>
+          <div className="flex items-center gap-3">
+            <img src={telecabLogo} alt="Telecab" className="h-8 w-8 rounded object-contain bg-white/10 p-0.5" />
+            <div>
+              <h1 className="text-base font-bold tracking-tight md:text-lg">
+                Acompanhamento Entrega PAPs
+              </h1>
+              <p className="text-[10px] opacity-70">Telecab — Painel do Supervisor</p>
+            </div>
           </div>
           {alerts.length > 0 && (
-            <div className="flex items-center gap-1.5 rounded-full bg-destructive/20 px-3 py-1 text-[10px] font-semibold">
-              ⚠ {alerts.length} alerta{alerts.length > 1 ? 's' : ''}
-            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg hover:bg-red-700 transition-colors animate-pulse cursor-pointer">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {alerts.length} alerta{alerts.length > 1 ? 's' : ''}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0" align="end">
+                <div className="border-b bg-red-50 px-4 py-2.5">
+                  <p className="text-sm font-bold text-red-700">⚠️ Alertas Ativos</p>
+                </div>
+                <div className="max-h-60 overflow-y-auto p-2 space-y-1.5">
+                  {alerts.map((a, i) => (
+                    <div key={i} className="rounded-md border px-3 py-2 text-xs">
+                      <p className="font-semibold text-foreground">{a.title}</p>
+                      <p className="text-muted-foreground mt-0.5">{a.message}</p>
+                    </div>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
         </div>
       </header>
