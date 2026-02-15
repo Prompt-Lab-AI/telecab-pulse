@@ -2,93 +2,72 @@ import { useState, useMemo } from 'react';
 import { useSheetsData } from '@/hooks/useSheetsData';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { DataTable } from '@/components/dashboard/DataTable';
-import { MonthlyEvolutionChart, FunnelStageChart, SalesByProductChart } from '@/components/dashboard/Charts';
+import { SalesEvolutionChart, FunnelChart, RevenueByProductChart, PapRankingChart, TicketByPapChart } from '@/components/dashboard/Charts';
+import { AlertsPanel } from '@/components/dashboard/AlertsPanel';
 import { Filters } from '@/components/dashboard/Filters';
 import { WeeklyCalendar } from '@/components/dashboard/WeeklyCalendar';
 import { CommemorativeDates } from '@/components/dashboard/CommemorativeDates';
 import { CondominiosList } from '@/components/dashboard/CondominiosList';
 import { exportToExcel } from '@/lib/export';
-import { num, str, SheetRow } from '@/lib/sheets';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  applyAllFilters, calculateKPIs, calculatePapRankings, generateAlerts,
+  enrichBaseRows, getRevenueByProduct, getVendasByDay, getFunnelData,
+  getCurrentMesAno,
+} from '@/lib/analytics';
 
 const Index = () => {
   const {
-    baseUnica, visaoMensal, esteiraMensal, baseDados,
+    baseUnica, visaoMensal, esteiraMensal,
     programacaoSemanal, datasComemoativas, acompCondominios,
     loading, lastUpdate, refetch,
   } = useSheetsData();
 
-  const [filters, setFilters] = useState<Record<string, string>>({});
-
-  // Detect columns from baseUnica headers
-  const baseHeaders = baseUnica.length > 0 ? Object.keys(baseUnica[0]) : [];
-  const papKey = baseHeaders.find(h => /pap|vendedor|nome/i.test(h)) || baseHeaders[0] || '';
-  const cidadeKey = baseHeaders.find(h => /cidade|city|localidade/i.test(h)) || '';
-  const statusKey = baseHeaders.find(h => /status|ativo|situacao/i.test(h)) || '';
+  const [filters, setFilters] = useState<Record<string, string>>({ mes: getCurrentMesAno() });
 
   // Filter options
   const filterOptions = useMemo(() => {
-    const opts: { key: string; label: string; values: string[] }[] = [];
-    if (papKey) opts.push({ key: 'pap', label: 'Todos PAPs', values: [...new Set(baseUnica.map(r => r[papKey]).filter(Boolean))].sort() });
-    if (cidadeKey) opts.push({ key: 'cidade', label: 'Todas Cidades', values: [...new Set(baseUnica.map(r => r[cidadeKey]).filter(Boolean))].sort() });
-    if (statusKey) opts.push({ key: 'status', label: 'Todos Status', values: [...new Set(baseUnica.map(r => r[statusKey]).filter(Boolean))].sort() });
-    return opts;
-  }, [baseUnica, papKey, cidadeKey, statusKey]);
+    const unique = (key: string) => [...new Set(baseUnica.map(r => r[key]).filter(Boolean))].sort();
+    const meses = [...new Set(baseUnica.map(r => r['mês/ano']).filter(Boolean))];
+    return [
+      { key: 'mes', label: 'Todos os Meses', values: meses },
+      { key: 'pap', label: 'Todos PAPs', values: unique('pap') },
+      { key: 'cidade', label: 'Todas Cidades', values: unique('cidade') },
+      { key: 'produto', label: 'Todos Produtos', values: unique('produto') },
+      { key: 'status', label: 'Todos Status', values: unique('status') },
+    ];
+  }, [baseUnica]);
 
-  // Filtered base data
-  const filteredBase = useMemo(() => {
-    let d = baseUnica;
-    if (filters.pap && filters.pap !== 'all') d = d.filter(r => r[papKey] === filters.pap);
-    if (filters.cidade && filters.cidade !== 'all') d = d.filter(r => r[cidadeKey] === filters.cidade);
-    if (filters.status && filters.status !== 'all') d = d.filter(r => r[statusKey] === filters.status);
-    return d;
-  }, [baseUnica, filters, papKey, cidadeKey, statusKey]);
+  // Apply filters
+  const filteredBase = useMemo(() => applyAllFilters(baseUnica, filters), [baseUnica, filters]);
 
-  // KPI calculations from baseUnica
-  const kpis = useMemo(() => {
-    const totalRows = filteredBase.length;
-    const vendaKeys = baseHeaders.filter(h => /venda|vendas|sold/i.test(h));
-    const visitaKeys = baseHeaders.filter(h => /visita|visit/i.test(h));
-    const valorKeys = baseHeaders.filter(h => /valor|total|receita|ticket/i.test(h));
-    const metaKeys = baseHeaders.filter(h => /meta/i.test(h));
-    const instaladoKeys = baseHeaders.filter(h => /instalad|install/i.test(h));
-    const churnKeys = baseHeaders.filter(h => /churn/i.test(h));
+  // KPIs
+  const kpis = useMemo(() => calculateKPIs(filteredBase, visaoMensal, esteiraMensal), [filteredBase, visaoMensal, esteiraMensal]);
 
-    let totalVendas = 0, totalVisitas = 0, totalValor = 0, totalMeta = 0, totalInstalado = 0, totalChurn = 0;
-    filteredBase.forEach(r => {
-      totalVendas += num(r, ...vendaKeys);
-      totalVisitas += num(r, ...visitaKeys);
-      totalValor += num(r, ...valorKeys);
-      totalMeta += num(r, ...metaKeys);
-      totalInstalado += num(r, ...instaladoKeys);
-      totalChurn += num(r, ...churnKeys);
-    });
+  // Rankings
+  const rankings = useMemo(() => calculatePapRankings(filteredBase), [filteredBase]);
 
-    const metaPercent = totalMeta > 0 ? (totalVendas / totalMeta) * 100 : 0;
-    const conversao = totalVisitas > 0 ? (totalVendas / totalVisitas) * 100 : 0;
-    const ticketMedio = totalVendas > 0 ? totalValor / totalVendas : 0;
+  // Alerts
+  const alerts = useMemo(() => generateAlerts(kpis, rankings), [kpis, rankings]);
 
-    return { totalVendas, totalVisitas, totalValor, metaPercent, conversao, ticketMedio, totalInstalado, totalChurn, totalMeta };
-  }, [filteredBase, baseHeaders]);
+  // Enriched table data
+  const enrichedData = useMemo(() => enrichBaseRows(filteredBase), [filteredBase]);
 
-  // Table columns from baseUnica
-  const tableColumns = useMemo(() => {
-    return baseHeaders.slice(0, 10).map(h => ({
-      key: h,
-      label: h.charAt(0).toUpperCase() + h.slice(1),
-    }));
-  }, [baseHeaders]);
+  // Chart data
+  const vendasByDay = useMemo(() => getVendasByDay(filteredBase), [filteredBase]);
+  const funnelData = useMemo(() => getFunnelData(esteiraMensal), [esteiraMensal]);
+  const revenueByProduct = useMemo(() => getRevenueByProduct(filteredBase), [filteredBase]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-background p-4 md:p-8">
         <div className="mx-auto max-w-7xl space-y-6">
           <Skeleton className="h-10 w-80" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+            {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-24 rounded-xl" />)}
           </div>
-          <Skeleton className="h-80 rounded-xl" />
+          <Skeleton className="h-72 rounded-xl" />
         </div>
       </div>
     );
@@ -96,18 +75,25 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-primary px-4 py-3 text-primary-foreground shadow-md md:px-8">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold tracking-tight md:text-xl">
+            <h1 className="text-base font-bold tracking-tight md:text-lg">
               📊 Acompanhamento Entrega PAPs
             </h1>
-            <p className="text-xs opacity-80">Telecab — Painel do Supervisor</p>
+            <p className="text-[10px] opacity-70">Telecab — Painel do Supervisor</p>
           </div>
+          {alerts.length > 0 && (
+            <div className="flex items-center gap-1.5 rounded-full bg-destructive/20 px-3 py-1 text-[10px] font-semibold">
+              ⚠ {alerts.length} alerta{alerts.length > 1 ? 's' : ''}
+            </div>
+          )}
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-6">
+      <main className="mx-auto max-w-7xl space-y-4 p-4 md:p-6">
+        {/* Filters */}
         <Filters
           filterOptions={filterOptions}
           filterValues={filters}
@@ -117,65 +103,81 @@ const Index = () => {
           lastUpdate={lastUpdate}
         />
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        {/* KPIs - 6 cards */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
           <KpiCard
             title="Meta Atingida"
-            value={`${kpis.metaPercent.toFixed(1)}%`}
-            subtitle={`${kpis.totalVendas} / ${kpis.totalMeta} vendas`}
+            value={kpis.metaMensal > 0 ? `${kpis.metaAtingida.toFixed(1)}%` : 'N/D'}
+            subtitle={`${kpis.totalVendasValidas} / ${kpis.metaMensal} vendas`}
             icon="target"
-            trend={kpis.metaPercent >= 80 ? 'up' : 'down'}
+            trend={kpis.metaAtingida >= 80 ? 'up' : 'down'}
+            alert={kpis.metaAtingida < 80 && kpis.metaMensal > 0 ? 'warning' : null}
           />
           <KpiCard
-            title="Taxa de Conversão"
-            value={`${kpis.conversao.toFixed(1)}%`}
-            subtitle={`${kpis.totalVendas} vendas / ${kpis.totalVisitas} visitas`}
+            title="Conversão"
+            value={kpis.vendasSubidas > 0 ? `${kpis.taxaConversao.toFixed(1)}%` : 'N/D'}
+            subtitle={`${kpis.vendasInstaladas} inst / ${kpis.vendasSubidas} sub`}
             icon="conversion"
-            trend={kpis.conversao >= 25 ? 'up' : 'down'}
+            trend={kpis.taxaConversao >= 70 ? 'up' : 'down'}
           />
           <KpiCard
-            title="Churn 90 dias"
-            value={`${kpis.totalChurn}`}
-            subtitle="Clientes perdidos"
+            title="Churn 90d"
+            value={`${kpis.churn90d.toFixed(1)}%`}
+            subtitle={`${kpis.cancelamentos90d} canc / ${kpis.contratosUltimos90d} contratos`}
             icon="churn"
-            trend={kpis.totalChurn === 0 ? 'up' : 'down'}
+            trend={kpis.churn90d <= 5 ? 'up' : 'down'}
+            alert={kpis.churn90d > 5 ? 'error' : null}
           />
           <KpiCard
             title="Ticket Médio"
-            value={`R$ ${kpis.ticketMedio.toFixed(0)}`}
-            subtitle={`Valor total: R$ ${kpis.totalValor.toLocaleString('pt-BR')}`}
-            icon="cac"
-            trend={kpis.ticketMedio >= 80 ? 'up' : 'neutral'}
+            value={`R$ ${kpis.ticketMedio.toFixed(2)}`}
+            subtitle={`${kpis.totalContratosAtivos} contratos ativos`}
+            icon="ticket"
+            trend={kpis.ticketMedio >= 60 ? 'up' : 'stable'}
           />
           <KpiCard
-            title="Vendas Instaladas"
-            value={`${kpis.totalInstalado}`}
-            subtitle="Instalações concluídas"
+            title="Instaladas"
+            value={`${kpis.totalVendasValidas}`}
+            subtitle="Vendas com ativação"
             icon="installed"
-            trend={kpis.totalInstalado > 0 ? 'up' : 'neutral'}
+            trend={kpis.totalVendasValidas > 0 ? 'up' : 'stable'}
+          />
+          <KpiCard
+            title="MRR Ativo"
+            value={`R$ ${kpis.mrrAtivo.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
+            subtitle="Receita mensal ativa"
+            icon="mrr"
+            trend={kpis.mrrAtivo > 0 ? 'up' : 'stable'}
           />
         </div>
 
+        {/* Intelligence Panel */}
+        <AlertsPanel alerts={alerts} rankings={rankings} />
+
         {/* Tabs */}
-        <Tabs defaultValue="base" className="space-y-4">
+        <Tabs defaultValue="graficos" className="space-y-4">
           <TabsList className="flex flex-wrap h-auto gap-1">
-            <TabsTrigger value="base">Base Única</TabsTrigger>
             <TabsTrigger value="graficos">Gráficos</TabsTrigger>
+            <TabsTrigger value="base">Base Única</TabsTrigger>
             <TabsTrigger value="programacao">Programação</TabsTrigger>
             <TabsTrigger value="datas">Datas Comemorativas</TabsTrigger>
             <TabsTrigger value="condominios">Condomínios</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="base">
-            <DataTable data={filteredBase} title="Base Única — Desempenho PAPs" columns={tableColumns} />
+          <TabsContent value="graficos" className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <SalesEvolutionChart data={vendasByDay} />
+              <FunnelChart data={funnelData} />
+            </div>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <RevenueByProductChart data={revenueByProduct} />
+              <PapRankingChart data={rankings} />
+              <TicketByPapChart data={rankings} />
+            </div>
           </TabsContent>
 
-          <TabsContent value="graficos" className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <MonthlyEvolutionChart data={visaoMensal} />
-              <FunnelStageChart data={esteiraMensal} />
-            </div>
-            <SalesByProductChart data={baseUnica} />
+          <TabsContent value="base">
+            <DataTable data={enrichedData} title="Base Única — Contratos" />
           </TabsContent>
 
           <TabsContent value="programacao">
