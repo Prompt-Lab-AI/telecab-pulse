@@ -1,48 +1,55 @@
 import { Card, CardContent } from '@/components/ui/card';
-import { TrendingUp, TrendingDown, Target, Users, DollarSign, BarChart3, ShoppingCart } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Target, BarChart3, Users, DollarSign, ShoppingCart, Wallet } from 'lucide-react';
+import type { Trend } from '@/lib/analytics';
 
 interface KpiCardProps {
   title: string;
   value: string;
   subtitle?: string;
-  icon: 'target' | 'conversion' | 'churn' | 'cac' | 'installed';
-  trend?: 'up' | 'down' | 'neutral';
+  icon: 'target' | 'conversion' | 'churn' | 'ticket' | 'installed' | 'mrr';
+  trend?: Trend;
+  alert?: 'error' | 'warning' | null;
 }
 
 const icons = {
   target: Target,
   conversion: BarChart3,
   churn: Users,
-  cac: DollarSign,
+  ticket: DollarSign,
   installed: ShoppingCart,
+  mrr: Wallet,
 };
 
-export function KpiCard({ title, value, subtitle, icon, trend }: KpiCardProps) {
+const TrendIcon = ({ trend }: { trend?: Trend }) => {
+  if (!trend || trend === 'stable') return <Minus className="h-4 w-4 text-muted-foreground" />;
+  if (trend === 'up') return <TrendingUp className="h-4 w-4 text-emerald-400" />;
+  return <TrendingDown className="h-4 w-4 text-red-400" />;
+};
+
+export function KpiCard({ title, value, subtitle, icon, trend, alert }: KpiCardProps) {
   const Icon = icons[icon];
+  
+  const borderClass = alert === 'error' 
+    ? 'ring-2 ring-red-500/50' 
+    : alert === 'warning' 
+    ? 'ring-2 ring-yellow-500/50' 
+    : '';
 
   return (
-    <Card className="relative overflow-hidden border-none bg-primary text-primary-foreground shadow-lg">
-      <div className="absolute right-0 top-0 h-full w-24 opacity-10">
+    <Card className={`relative overflow-hidden border-none bg-primary text-primary-foreground shadow-lg ${borderClass}`}>
+      <div className="absolute right-0 top-0 h-full w-20 opacity-[0.07]">
         <Icon className="h-full w-full" />
       </div>
-      <CardContent className="p-5">
-        <div className="flex items-center gap-2 text-xs font-medium opacity-80">
-          <Icon className="h-4 w-4" />
+      <CardContent className="p-4">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider opacity-80">
+          <Icon className="h-3.5 w-3.5" />
           {title}
         </div>
         <div className="mt-2 flex items-end gap-2">
-          <span className="text-2xl font-bold tracking-tight md:text-3xl">{value}</span>
-          {trend && trend !== 'neutral' && (
-            <span className="mb-1">
-              {trend === 'up' ? (
-                <TrendingUp className="h-5 w-5 text-green-300" />
-              ) : (
-                <TrendingDown className="h-5 w-5 text-red-300" />
-              )}
-            </span>
-          )}
+          <span className="text-2xl font-bold tracking-tight">{value}</span>
+          <TrendIcon trend={trend} />
         </div>
-        {subtitle && <p className="mt-1 text-xs opacity-70">{subtitle}</p>}
+        {subtitle && <p className="mt-1 text-[11px] opacity-60 leading-tight">{subtitle}</p>}
       </CardContent>
     </Card>
   );
