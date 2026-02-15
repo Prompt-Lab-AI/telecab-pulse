@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useSheetsData } from '@/hooks/useSheetsData';
 import { KpiCard } from '@/components/dashboard/KpiCard';
-import { DataTable } from '@/components/dashboard/DataTable';
+import { BaseUnicaPanel } from '@/components/dashboard/BaseUnicaPanel';
 import { SalesEvolutionChart, FunnelChart, RevenueByProductChart, PapRankingChart, TicketByPapChart } from '@/components/dashboard/Charts';
 import { AlertsPanel } from '@/components/dashboard/AlertsPanel';
 import { Filters } from '@/components/dashboard/Filters';
@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   applyAllFilters, calculateKPIs, calculatePapRankings, generateAlerts,
-  enrichBaseRows, getRevenueByProduct, getVendasByDay, getFunnelData,
+  getRevenueByProduct, getVendasByDay, getFunnelData,
   getCurrentMesAno,
 } from '@/lib/analytics';
 
@@ -51,8 +51,7 @@ const Index = () => {
   // Alerts
   const alerts = useMemo(() => generateAlerts(kpis, rankings), [kpis, rankings]);
 
-  // Enriched table data
-  const enrichedData = useMemo(() => enrichBaseRows(filteredBase), [filteredBase]);
+
 
   // Chart data
   const vendasByDay = useMemo(() => getVendasByDay(filteredBase), [filteredBase]);
@@ -177,7 +176,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="base">
-            <DataTable data={enrichedData} title="Base Única — Contratos" />
+            <BaseUnicaPanel data={filteredBase} />
           </TabsContent>
 
           <TabsContent value="programacao">
