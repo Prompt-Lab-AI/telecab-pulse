@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useSheetsData } from '@/hooks/useSheetsData';
 import { KpiCard } from '@/components/dashboard/KpiCard';
 import { BaseUnicaPanel } from '@/components/dashboard/BaseUnicaPanel';
-import { SalesEvolutionChart, FunnelChart, RevenueByProductChart, PapRankingChart, TicketByPapChart } from '@/components/dashboard/Charts';
+import { ExecutivePanel } from '@/components/dashboard/Charts';
 import { AlertsPanel } from '@/components/dashboard/AlertsPanel';
 import { Filters } from '@/components/dashboard/Filters';
 import { WeeklyCalendar } from '@/components/dashboard/WeeklyCalendar';
@@ -163,16 +163,14 @@ const Index = () => {
             <TabsTrigger value="condominios">Condomínios</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="graficos" className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              <SalesEvolutionChart data={vendasByDay} />
-              <FunnelChart data={funnelData} />
-            </div>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-              <RevenueByProductChart data={revenueByProduct} />
-              <PapRankingChart data={rankings} />
-              <TicketByPapChart data={rankings} />
-            </div>
+          <TabsContent value="graficos">
+            <ExecutivePanel
+              kpis={kpis}
+              rankings={rankings}
+              vendasByDay={vendasByDay}
+              funnelData={funnelData}
+              revenueByProduct={revenueByProduct}
+            />
           </TabsContent>
 
           <TabsContent value="base">
