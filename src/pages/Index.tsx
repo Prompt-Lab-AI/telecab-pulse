@@ -8,6 +8,7 @@ import { Filters } from '@/components/dashboard/Filters';
 import { WeeklyCalendar } from '@/components/dashboard/WeeklyCalendar';
 import { CommemorativeDates } from '@/components/dashboard/CommemorativeDates';
 import { CondominiosList } from '@/components/dashboard/CondominiosList';
+import { VendedoresPanel } from '@/components/dashboard/VendedoresPanel';
 import { exportToExcel } from '@/lib/export';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -185,6 +186,7 @@ const Index = () => {
             <TabsTrigger value="programacao">Programação</TabsTrigger>
             <TabsTrigger value="datas">Datas Comemorativas</TabsTrigger>
             <TabsTrigger value="condominios">Condomínios</TabsTrigger>
+            <TabsTrigger value="vendedores">Vendedores</TabsTrigger>
           </TabsList>
 
           <TabsContent value="graficos">
@@ -211,6 +213,10 @@ const Index = () => {
 
           <TabsContent value="condominios">
             <CondominiosList data={acompCondominios} />
+          </TabsContent>
+
+          <TabsContent value="vendedores">
+            <VendedoresPanel data={filteredBase} />
           </TabsContent>
         </Tabs>
       </main>
